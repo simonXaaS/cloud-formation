@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  MyS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: test-s3
+      VersioningConfiguration:
+        Status: 'Enabled'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+
+
+
+

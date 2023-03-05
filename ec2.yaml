@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - m1.small
+      - m1.large
+    Description: Select instance type
+
+  MyKeyPair: 
+    Description: Select an existing key pair
+    Type: "AWS::EC2::KeyPair::KeyName"
+
+  MyLatestAMI:
+    Description: 'Latest AMI for EC2 instance'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  
+  MySecurityGroupPublic:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'MySecurityGroupPublic'
+      VpcId: 
+        Ref: 'MyVPC'
+      SecurityGroupIngress:
+        - IpProtocol: 'all'
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 10.0.1.0/24
+
+  MYIAMRolePublic: 
+    Type: 'AWS::IAM::Role'
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - 
+            Effect: 'Allow'
+            Principal: 
+              Service: 
+                - 'ec2.amazonaws.com'
+            Action: 
+              - 'sts:AssumeRole'
+      Path: '/'
+  MYIAMPolicyPublic: 
+    Type: 'AWS::IAM::Policy'
+    Properties: 
+      PolicyName: 'MYIAMPolicyPublic'
+      PolicyDocument: 
+        Version: '2012-10-17'
+        Statement: 
+          - Effect: 'Allow'
+            Action:
+              - 's3:ListBucket'
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref MyS3Bucket]]
+              - !Join ['', ['arn:aws:s3:::', !Ref MyS3Bucket, '/*']]
+      Roles: 
+        - Ref: 'MYIAMRolePublic'
+  MyInstanceProfilePublic: 
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties: 
+      Path: '/'
+      Roles: 
+        - Ref: 'MYIAMRolePublic'
+
+  MyPublicEC2Instance: 
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType:
+        Ref: InstanceType
+      ImageId:
+        Ref: MyLatestAMI
+      IamInstanceProfile:
+        Ref: MyInstanceProfilePublic
+      KeyName: 
+        Ref: 'MyKeyPair'
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          PrivateIpAddress: '10.0.1.5'
+          GroupSet: 
+            - Ref: 'MySecurityGroupPublic'
+          SubnetId: 
+            Ref: 'MyPublicSubnet'
+      Tags:
+        - Key:  'Name'
+          Value: 'MyPublicEC2Instance'
+
+  MyEIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      InstanceId: !Ref 'MyPublicEC2Instance'
+      Tags:
+        - Key:  'Name'
+          Value: 'MyEIP'
+
+  MyEIPAssociation:
+    Type: 'AWS::EC2::EIPAssociation'
+    DependsOn: 'MyEIP'
+    Properties:
+      InstanceId:
+        Ref: 'MyPublicEC2Instance'
+      AllocationId: !GetAtt MyEIP.AllocationId
